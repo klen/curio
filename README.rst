@@ -4,6 +4,20 @@ Curio
 .. warning::
    This version is a fork of the original Curio project by David Beazley. The main goal of this fork is to provide latest updates to PyPI.
 
+.. _badges:
+
+.. image:: https://github.com/klen/curio/workflows/tests/badge.svg
+    :target: https://github.com/klen/curio/actions
+    :alt: Tests Status
+
+.. image:: https://img.shields.io/pypi/v/curio-compat
+    :target: https://pypi.org/project/curio-compat/
+    :alt: PYPI Version
+
+.. image:: https://img.shields.io/pypi/pyversions/curio-compat
+    :target: https://pypi.org/project/curio-compat/
+    :alt: Python Versions
+
 Curio is a coroutine-based library for concurrent Python systems
 programming using async/await.  It provides standard programming
 abstractions such as tasks, sockets, files, locks, and queues as
