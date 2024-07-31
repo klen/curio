@@ -2,11 +2,11 @@
 requires = ["setuptools", "wheel"]
 
 [project]
-name = "curio"
+name = "curio-compat"
 description = "Curio is a coroutine-based library for concurrent systems programming."
 readme = "README.rst"
 license = { "text" = "BSD" }
-version = "1.6"
+version = "1.6.0"
 requires-python = ">=3.8"
 authors = [{ name = "David Beazley", email = "dave@dabeaz.com" }]
 classifiers = ["Programming Language :: Python :: 3", "Framework :: Pytest", "Framework :: Curio"]
@@ -16,7 +16,7 @@ homepage = "https://github.com/dabeaz/curio"
 repository = "https://github.com/dabeaz/curio"
 
 [project.optional-dependencies]
-test = ["pytest", "Sphinx", "ruff", "mypy", "pre-commit"]
+test = ["pytest", "Sphinx", "ruff", "mypy", "pre-commit", "bump2version"]
 
 [tool.setuptools]
 packages = ['curio']
