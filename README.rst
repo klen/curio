@@ -1,6 +1,8 @@
 Curio
 =====
 
+.. note: This version is a fork of the original Curio project by David Beazley. The main goal of this fork is to provide latest updates to PyPI.
+
 Curio is a coroutine-based library for concurrent Python systems
 programming using async/await.  It provides standard programming
 abstractions such as tasks, sockets, files, locks, and queues as
@@ -53,10 +55,10 @@ Here is a concurrent TCP echo server directly implemented using sockets:
 .. code:: python
 
     # echoserv.py
-    
+
     from curio import run, spawn
     from curio.socket import *
-    
+
     async def echo_server(address):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -67,7 +69,7 @@ Here is a concurrent TCP echo server directly implemented using sockets:
             while True:
                 client, addr = await sock.accept()
                 await spawn(echo_client, client, addr, daemon=True)
-    
+
     async def echo_client(client, addr):
         print('Connection from', addr)
         async with client:
@@ -123,7 +125,7 @@ Questions and Answers
 
 **Q: What is the point of the Curio project?**
 
-A: Curio is async programming, reimagined as something smaller, faster, and easier 
+A: Curio is async programming, reimagined as something smaller, faster, and easier
 to reason about. It is meant to be both educational and practical.
 
 **Q: Is Curio implemented using asyncio?**
@@ -148,7 +150,7 @@ provide variations on the existing approach found in asyncio.
 A: It depends on what you mean by the word "interoperate."  Curio's
 preferred mechanism of communication with the external world is a
 queue.  It is possible to communicate between Curio, threads, and
-other event loops using queues.  
+other event loops using queues.
 
 **Q: How fast is Curio?**
 
@@ -175,8 +177,8 @@ support new versions of Python.
 
 A: Curio is not a community-based project seeking developers
 or maintainers.  However, having it work reliably is important. If you've
-found a bug or have an idea for making it better, please 
-file an `issue <https://github.com/dabeaz/curio>`_. 
+found a bug or have an idea for making it better, please
+file an `issue <https://github.com/dabeaz/curio>`_.
 
 Contributors
 ------------
@@ -197,6 +199,3 @@ come take a `course <https://www.dabeaz.com/courses.html>`_!
 .. |--| unicode:: U+2013   .. en dash
 .. |---| unicode:: U+2014  .. em dash, trimming surrounding whitespace
    :trim:
-
-
-

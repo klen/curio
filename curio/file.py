@@ -39,7 +39,7 @@
 #                ...
 #
 
-__all__ = ['aopen', 'anext']
+__all__ = ["aopen", "anext"]
 
 # -- Standard library
 
@@ -52,12 +52,13 @@ from .workers import run_in_thread
 from .errors import SyncIOError, CancelledError
 from . import thread
 
+
 class AsyncFile(object):
-    '''
+    """
     An async wrapper around a standard file object.  Uses threads to
     execute various I/O operations in a way that avoids blocking
     the Curio kernel loop.
-    '''
+    """
 
     def __init__(self, fileobj, open_args=None, open_kwargs=None):
         self._fileobj = fileobj
@@ -65,19 +66,19 @@ class AsyncFile(object):
         self._open_kwargs = open_kwargs
 
     def __repr__(self):
-        return 'AsyncFile(%r)' % self._fileobj
+        return "AsyncFile(%r)" % self._fileobj
 
     @contextmanager
     def blocking(self):
-        '''
+        """
         Expose the underlying file in blocking mode for use with synchronous code.
-        '''
+        """
         yield self._file
 
     @property
     def _file(self):
         if self._fileobj is None:
-            raise RuntimeError('Must use an async file as an async-context-manager.')
+            raise RuntimeError("Must use an async file as an async-context-manager.")
         return self._fileobj
 
     async def read(self, *args, **kwargs):
@@ -120,10 +121,10 @@ class AsyncFile(object):
         return await run_in_thread(partial(self._file.truncate, *args, **kwargs))
 
     def __iter__(self):
-        raise SyncIOError('Use asynchronous iteration')
+        raise SyncIOError("Use asynchronous iteration")
 
     def __next__(self):
-        raise SyncIOError('Use asynchronous iteration')
+        raise SyncIOError("Use asynchronous iteration")
 
     def __enter__(self):
         return thread.AWAIT(self.__aenter__())
@@ -136,7 +137,9 @@ class AsyncFile(object):
 
     async def __aenter__(self):
         if self._fileobj is None:
-            self._fileobj = await run_in_thread(partial(open, *self._open_args, **self._open_kwargs))
+            self._fileobj = await run_in_thread(
+                partial(open, *self._open_args, **self._open_kwargs)
+            )
         return self
 
     async def __aexit__(self, *args):
@@ -155,7 +158,7 @@ class AsyncFile(object):
     async def readall(self):
         chunks = []
         maxread = 65536
-        sep = '' if hasattr(self._file, 'encoding') else b''
+        sep = "" if hasattr(self._file, "encoding") else b""
         while True:
             try:
                 chunk = await self.read(maxread)
@@ -168,19 +171,21 @@ class AsyncFile(object):
             if len(chunk) == maxread:
                 maxread *= 2
 
+
 def aopen(*args, **kwargs):
-    '''
+    """
     Async version of the builtin open() function that returns an async-compatible
     file object.  Takes the same arguments.  Returns a wrapped file in which
     blocking I/O operations must be awaited.
-    '''
+    """
     return AsyncFile(None, args, kwargs)
 
-async def anext(f, sentinel=object):
-    '''
+
+async def anext(f, sentinel=object):  # noqa: A001
+    """
     Async version of the builtin next() function that advances an async iterator.
     Sometimes used to skip a single line in files.
-    '''
+    """
     try:
         return await f.__anext__()
     except StopAsyncIteration:

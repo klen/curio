@@ -10,7 +10,16 @@
 # a queue.  When a task releases a lock, it wakes a sleeping task.
 # Task scheduling is provided by the SchedFIFO and SchedBarrier classes in sched.py
 
-__all__ = ['Event', 'UniversalEvent', 'Lock', 'RLock', 'Semaphore', 'Condition', 'Result', 'UniversalResult' ]
+__all__ = [
+    "Event",
+    "UniversalEvent",
+    "Lock",
+    "RLock",
+    "Semaphore",
+    "Condition",
+    "Result",
+    "UniversalResult",
+]
 
 # -- Standard library
 
@@ -21,11 +30,11 @@ import asyncio
 # -- Curio
 
 from .sched import SchedFIFO, SchedBarrier
-from . import workers
 from .task import current_task
-from .meta import awaitable, asyncioable, iscoroutinefunction
+from .meta import awaitable, asyncioable
 from . import thread
 from .traps import _future_wait
+
 
 class Event(object):
 
@@ -35,8 +44,8 @@ class Event(object):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'set' if self._set else 'unset'
-        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
+        extra = "set" if self._set else "unset"
+        return f"<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>"
 
     def is_set(self):
         return self._set
@@ -47,16 +56,18 @@ class Event(object):
     async def wait(self):
         if self._set:
             return
-        await self._waiting.suspend('EVENT_WAIT')
+        await self._waiting.suspend("EVENT_WAIT")
 
     async def set(self):
         self._set = True
         await self._waiting.wake()
 
+
 class UniversalEvent(object):
-    '''
+    """
     An event that's safe to use from Curio and threads.
-    '''
+    """
+
     def __init__(self):
         self._set = False
         self._lock = threading.Lock()
@@ -64,8 +75,8 @@ class UniversalEvent(object):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'set' if self._set else 'unset'
-        return f'<{res[1:-1]} [{extra}]>'
+        extra = "set" if self._set else "unset"
+        return f"<{res[1:-1]} [{extra}]>"
 
     def is_set(self):
         return self._set
@@ -85,7 +96,7 @@ class UniversalEvent(object):
         finally:
             self._waiting.discard(fut)
 
-    @awaitable(wait)
+    @awaitable(wait)  # type: ignore[no-redef]
     async def wait(self):
         with self._lock:
             if self._set:
@@ -97,7 +108,7 @@ class UniversalEvent(object):
         finally:
             self._waiting.discard(fut)
 
-    @asyncioable(wait)
+    @asyncioable(wait)  # type: ignore[no-redef]
     async def wait(self):
         with self._lock:
             if self._set:
@@ -115,7 +126,7 @@ class UniversalEvent(object):
         for fut in now_waiting:
             if not fut.done():
                 fut.set_result(True)
-            
+
     def set(self):
         with self._lock:
             if self._set:
@@ -123,23 +134,25 @@ class UniversalEvent(object):
             self._set = True
             self._unblock_waiters()
 
-    @awaitable(set)
+    @awaitable(set)  # type: ignore[no-redef]
     async def set(self):
         with self._lock:
             if self._set:
                 return
             self._set = True
-            self._unblock_waiters()        
+            self._unblock_waiters()
 
-    @asyncioable(set)
+    @asyncioable(set)  # type: ignore[no-redef]
     async def set(self):
         with self._lock:
             if self._set:
                 return
             self._set = True
-            self._unblock_waiters()                
+            self._unblock_waiters()
+
 
 # Base class for all synchronization primitives that operate as context managers.
+
 
 class _LockBase(object):
 
@@ -156,6 +169,7 @@ class _LockBase(object):
     def __exit__(self, *args):
         return thread.AWAIT(self.__aexit__(*args))
 
+
 class Lock(_LockBase):
 
     def __init__(self):
@@ -164,17 +178,17 @@ class Lock(_LockBase):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'locked' if self.locked() else 'unlocked'
-        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
+        extra = "locked" if self.locked() else "unlocked"
+        return f"<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>"
 
     async def acquire(self):
         if self._acquired:
-            await self._waiting.suspend('LOCK_ACQUIRE')
+            await self._waiting.suspend("LOCK_ACQUIRE")
         self._acquired = True
         return True
 
     async def release(self):
-        assert self._acquired, 'Lock not acquired'
+        assert self._acquired, "Lock not acquired"
         if self._waiting:
             await self._waiting.wake()
         else:
@@ -182,6 +196,7 @@ class Lock(_LockBase):
 
     def locked(self):
         return self._acquired
+
 
 class RLock(_LockBase):
 
@@ -192,8 +207,8 @@ class RLock(_LockBase):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'locked' if self.locked() else 'unlocked'
-        return f'<{res[1:-1]} [{extra},recursion:{self._count}]>'
+        extra = "locked" if self.locked() else "unlocked"
+        return f"<{res[1:-1]} [{extra},recursion:{self._count}]>"
 
     async def acquire(self):
 
@@ -208,9 +223,9 @@ class RLock(_LockBase):
 
     async def release(self):
         if not self.locked():
-            raise RuntimeError('RLock is not locked')
-        if not await current_task() is self._owner:
-            raise RuntimeError('RLock can only be released by the owner')
+            raise RuntimeError("RLock is not locked")
+        if await current_task() is not self._owner:
+            raise RuntimeError("RLock can only be released by the owner")
         self._count -= 1
         if self._count == 0:
             await self._lock.release()
@@ -228,8 +243,8 @@ class Semaphore(_LockBase):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'locked' if self.locked() else 'unlocked'
-        return f'<{res[1:-1]} [{extra},value:{self._value},waiters:{len(self._waiting)}]>'
+        extra = "locked" if self.locked() else "unlocked"
+        return f"<{res[1:-1]} [{extra},value:{self._value},waiters:{len(self._waiting)}]>"
 
     @property
     def value(self):
@@ -237,7 +252,7 @@ class Semaphore(_LockBase):
 
     async def acquire(self):
         if self._value <= 0:
-            await self._waiting.suspend('SEMA_ACQUIRE')
+            await self._waiting.suspend("SEMA_ACQUIRE")
         else:
             self._value -= 1
         return True
@@ -263,8 +278,8 @@ class Condition(_LockBase):
 
     def __repr__(self):
         res = super().__repr__()
-        extra = 'locked' if self.locked() else 'unlocked'
-        return f'<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>'
+        extra = "locked" if self.locked() else "unlocked"
+        return f"<{res[1:-1]} [{extra},waiters:{len(self._waiting)}]>"
 
     def locked(self):
         return self._lock.locked()
@@ -280,7 +295,7 @@ class Condition(_LockBase):
             raise RuntimeError("Can't wait on unacquired lock")
         await self.release()
         try:
-            await self._waiting.suspend('COND_WAIT')
+            await self._waiting.suspend("COND_WAIT")
         finally:
             await self.acquire()
 
@@ -299,6 +314,7 @@ class Condition(_LockBase):
     async def notify_all(self):
         await self.notify(len(self._waiting))
 
+
 class Result:
     def __init__(self):
         self._evt = Event()
@@ -306,15 +322,15 @@ class Result:
         self._exc = None
 
     def __repr__(self):
-        res = super().__repr__()        
+        res = super().__repr__()
         if self._evt.is_set():
-            return f'<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>'
+            return f"<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>"
         else:
-            return f'<{res[1:-1]}, not set>'
-        
+            return f"<{res[1:-1]}, not set>"
+
         status = "set" if self.is_set() else "not set"
-        return f'<Result status={status}>'
-    
+        return f"<Result status={status}>"
+
     def is_set(self):
         return self._evt.is_set()
 
@@ -328,13 +344,14 @@ class Result:
     async def set_value(self, value):
         self._value = value
         await self._evt.set()
-        
+
     async def set_exception(self, exc):
         self._exc = exc
         await self._evt.set()
 
+
 class UniversalResult:
-    
+
     def __init__(self):
         self._evt = UniversalEvent()
         self._value = None
@@ -343,9 +360,9 @@ class UniversalResult:
     def __repr__(self):
         res = super().__repr__()
         if self._evt.is_set():
-            return f'<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>'
+            return f"<{res[1:-1]}, value={self._value!r}, exc={self._exc!r}>"
         else:
-            return f'<{res[1:-1]}, not set>'
+            return f"<{res[1:-1]}, not set>"
 
     def is_set(self):
         return self._evt.is_set()
@@ -360,7 +377,7 @@ class UniversalResult:
         self._evt.wait()
         return self._return_result()
 
-    @awaitable(unwrap)
+    @awaitable(unwrap)  # type: ignore[no-redef]
     async def unwrap(self):
         await self._evt.wait()
         return self._return_result()
@@ -369,7 +386,7 @@ class UniversalResult:
         self._value = value
         self._evt.set()
 
-    @awaitable(set_value)
+    @awaitable(set_value)  # type: ignore[no-redef]
     async def set_value(self, value):
         self._value = value
         await self._evt.set()
@@ -378,9 +395,7 @@ class UniversalResult:
         self._exc = exc
         self._evt.set()
 
-    @awaitable(set_exception)
+    @awaitable(set_exception)  # type: ignore[no-redef]
     async def set_exception(self, exc):
         self._exc = exc
         await self._evt.set()
-
-

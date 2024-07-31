@@ -44,7 +44,7 @@
 #    asyncio where many parts of the implementation are required to
 #    carry a reference to the underlying event loop.
 
-__all__ = [ 'Kernel', 'run' ]
+__all__ = ["Kernel", "run"]
 
 # -- Standard Library
 
@@ -54,10 +54,10 @@ import os
 import errno
 from selectors import DefaultSelector, EVENT_READ, EVENT_WRITE
 from collections import deque
-import threading
 
 # Logger where uncaught exceptions from crashed tasks are logged
 import logging
+
 log = logging.getLogger(__name__)
 
 # -- Curio
@@ -70,7 +70,7 @@ from .timequeue import TimeQueue
 
 
 class Kernel(object):
-    '''
+    """
     Curio run-time kernel.  The selector argument specifies a
     different I/O selector. The debug argument specifies a list of
     debugger objects to apply. For example:
@@ -79,10 +79,17 @@ class Kernel(object):
         k = Kernel(debug=[schedtrace, traptrace])
 
     Use the kernel run() method to submit work to the kernel.
-    '''
+    """
 
-    def __init__(self, *, selector=None, debug=None, activations=None, taskcls=Task,
-                 max_select_timeout=None if os.name != 'nt' else 1.0):
+    def __init__(
+        self,
+        *,
+        selector=None,
+        debug=None,
+        activations=None,
+        taskcls=Task,
+        max_select_timeout=None if os.name != "nt" else 1.0,
+    ):
 
         # Functions to call at shutdown
         self._shutdown_funcs = []
@@ -103,6 +110,7 @@ class Kernel(object):
         # Debugging (activations in disguise)
         if debug:
             from .debug import _create_debuggers
+
             self._activations.extend(_create_debuggers(debug))
 
         # Task creation class
@@ -110,11 +118,11 @@ class Kernel(object):
 
         self._max_select_timeout = max_select_timeout
 
-
     def __del__(self):
         if self._shutdown_funcs is not None:
             raise RuntimeError(
-                'Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)')
+                "Curio kernel not properly terminated.  Please use Kernel.run(shutdown=True)"
+            )
 
     def __enter__(self):
         return self
@@ -126,13 +134,14 @@ class Kernel(object):
     def _call_at_shutdown(self, func):
         self._shutdown_funcs.append(func)
 
-
     # ----------
     # Submit a new task to the kernel
 
     def run(self, corofunc=None, *args, shutdown=False):
         if self._shutdown_funcs is None:
-            raise RuntimeError("Can't run a kernel that's been shut down or crashed. Create a new kernel.")
+            raise RuntimeError(
+                "Can't run a kernel that's been shut down or crashed. Create a new kernel."
+            )
 
         coro = meta.instantiate_coroutine(corofunc, *args) if corofunc else None
         with meta.running(self):
@@ -190,12 +199,12 @@ class Kernel(object):
         # Motto:  "What happens in the kernel stays in the kernel"
 
         # ---- Kernel State
-        current = None                          # Currently running task
-        selector = kernel._selector             # Event selector
-        ready = deque()                         # Ready queue
-        tasks = kernel._tasks                   # Task table
-        sleepq = TimeQueue()                    # Sleeping task queue
-        wake_queue = deque()                    # Thread wake queue
+        current = None  # Currently running task
+        selector = kernel._selector  # Event selector
+        ready = deque()  # Ready queue
+        tasks = kernel._tasks  # Task table
+        sleepq = TimeQueue()  # Sleeping task queue
+        wake_queue = deque()  # Thread wake queue
         _activations = []
 
         # ---- Bound methods
@@ -225,7 +234,7 @@ class Kernel(object):
             wake_queue_popleft = wake_queue.popleft
             while True:
                 await _read_wait(wait_sock)
-                data = wait_sock.recv(1000)
+                wait_sock.recv(1000)
 
                 # Process any waking tasks.  These are tasks that have
                 # been awakened externally to the event loop (e.g., by
@@ -241,7 +250,7 @@ class Kernel(object):
                     if future and task.future is not future:
                         continue
                     task.future = None
-                    task.state = 'READY'
+                    task.state = "READY"
                     task.cancel_func = None
                     ready_append(task)
 
@@ -261,7 +270,7 @@ class Kernel(object):
             if task:
                 wake_queue.append((task, future))
 
-            notify_sock.send(b'\x00')
+            notify_sock.send(b"\x00")
 
         def init_loopback():
             nonlocal notify_sock, wait_sock
@@ -289,7 +298,7 @@ class Kernel(object):
             assert task not in ready
 
             ready_append(task)
-            task.state = 'READY'
+            task.state = "READY"
             task.cancel_func = None
 
         # Suspend the current task
@@ -334,7 +343,7 @@ class Kernel(object):
                 return False
 
         # Set a timeout or sleep event on the current task
-        def set_timeout(clock, sleep_type='timeout'):
+        def set_timeout(clock, sleep_type="timeout"):
             if clock is None:
                 sleepq.cancel((current.id, sleep_type), getattr(current, sleep_type))
             else:
@@ -350,16 +359,22 @@ class Kernel(object):
                 key = selector_getkey(fileobj)
                 mask, (rtask, wtask) = key.events, key.data
                 if event == EVENT_READ and rtask:
-                    raise ReadResourceBusy(f"Multiple tasks can't wait to read on the same file descriptor {fileobj}")
+                    raise ReadResourceBusy(
+                        f"Multiple tasks can't wait to read on the same file descriptor {fileobj}"
+                    )
                 if event == EVENT_WRITE and wtask:
-                    raise WriteResourceBusy(f"Multiple tasks can't wait to write on the same file descriptor {fileobj}")
+                    raise WriteResourceBusy(
+                        f"Multiple tasks can't wait to write on the same file descriptor {fileobj}"
+                    )
 
-                selector_modify(fileobj, mask | event,
-                                (task, wtask) if event == EVENT_READ else (rtask, task))
+                selector_modify(
+                    fileobj, mask | event, (task, wtask) if event == EVENT_READ else (rtask, task)
+                )
                 selector_getkey(fileobj)
             except KeyError:
-                selector_register(fileobj, event,
-                                  (task, None) if event == EVENT_READ else (None, task))
+                selector_register(
+                    fileobj, event, (task, None) if event == EVENT_READ else (None, task)
+                )
 
         def unregister_event(fileobj, event):
             key = selector_getkey(fileobj)
@@ -368,8 +383,9 @@ class Kernel(object):
             if not mask:
                 selector_unregister(fileobj)
             else:
-                selector_modify(fileobj, mask,
-                                (None, wtask) if event == EVENT_READ else (rtask, None))
+                selector_modify(
+                    fileobj, mask, (None, wtask) if event == EVENT_READ else (rtask, None)
+                )
 
         # ------------------------------------------------------------
         # Traps
@@ -458,9 +474,10 @@ class Kernel(object):
             if event:
                 event.set()
 
-            suspend_task('FUTURE_WAIT',
-                          lambda task=current:
-                              setattr(task, 'future', future.cancel() and None))
+            suspend_task(
+                "FUTURE_WAIT",
+                lambda task=current: setattr(task, "future", future.cancel() and None),
+            )
 
         # ----------------------------------------
         # Add a new task to the kernel
@@ -538,9 +555,14 @@ class Kernel(object):
                 current = None
                 return
 
-            set_timeout(clock + time_monotonic(), 'sleep')
-            suspend_task('TIME_SLEEP',
-                          lambda task=current: (sleepq.cancel((task.id, 'sleep'), task.sleep), setattr(task, 'sleep', None)))
+            set_timeout(clock + time_monotonic(), "sleep")
+            suspend_task(
+                "TIME_SLEEP",
+                lambda task=current: (
+                    sleepq.cancel((task.id, "sleep"), task.sleep),
+                    setattr(task, "sleep", None),
+                ),
+            )
 
         # ----------------------------------------
         # Set a timeout to be delivered to the calling task
@@ -598,13 +620,15 @@ class Kernel(object):
         # ------------------------------------------------------------
 
         # Create the traps tables
-        kernel._traps = traps = { key:value for key, value in locals().items()
-                                  if key.startswith('trap_') }
+        kernel._traps = traps = {
+            key: value for key, value in locals().items() if key.startswith("trap_")
+        }
 
         # Initialize activations
-        kernel._activations = _activations = \
-            [ act() if (isinstance(act, type) and issubclass(act, Activation)) else act
-                    for act in kernel._activations ]
+        kernel._activations = _activations = [
+            act() if (isinstance(act, type) and issubclass(act, Activation)) else act
+            for act in kernel._activations
+        ]
 
         for act in _activations:
             act.activate(kernel)
@@ -642,8 +666,8 @@ class Kernel(object):
                 except OSError as e:
                     # If there is nothing to select, windows throws an
                     # OSError, so just set events to an empty list.
-                    wsaeinval = getattr(errno, 'WSAEINVAL', None)
-                    einval = getattr(errno, 'EINVAL', None)
+                    wsaeinval = getattr(errno, "WSAEINVAL", None)
+                    einval = getattr(errno, "EINVAL", None)
                     if e.errno not in (wsaeinval, einval):
                         raise
                     events = []
@@ -686,7 +710,6 @@ class Kernel(object):
                         else:
                             selector_unregister(key.fileobj)
 
-
                 # ------------------------------------------------------------
                 # Time handling (sleep/timeouts)
                 # ------------------------------------------------------------
@@ -706,7 +729,7 @@ class Kernel(object):
 
                     setattr(task, sleep_type, None)
 
-                    if sleep_type == 'sleep':
+                    if sleep_type == "sleep":
                         task._trap_result = current_time
                         reschedule_task(task)
 
@@ -729,7 +752,7 @@ class Kernel(object):
                     active = current = ready_popleft()
                     for a in _activations:
                         a.running(active)
-                    active.state = 'RUNNING'
+                    active.state = "RUNNING"
                     active.cycles += 1
 
                     # The current task runs until it suspends or terminates
@@ -744,7 +767,7 @@ class Kernel(object):
                             for wtask in active.joining._kernel_wake(len(active.joining)):
                                 reschedule_task(wtask)
                             active.terminated = True
-                            active.state = 'TERMINATED'
+                            active.state = "TERMINATED"
                             del tasks[active.id]
                             active.timeout = None
                             # Normal termination (set the result)
@@ -753,8 +776,10 @@ class Kernel(object):
                             else:
                                 # Abnormal termination (set an exception)
                                 active.exception = e
-                                if (active != main_task and not isinstance(e, (CancelledError, SystemExit))):
-                                    log.error('Task Crash: %r', active, exc_info=True)
+                                if active != main_task and not isinstance(
+                                    e, (CancelledError, SystemExit)
+                                ):
+                                    log.exception("Task Crash: %r", active)
                                 if not isinstance(e, (Exception, CancelledError)):
                                     raise
                             break
@@ -796,9 +821,10 @@ class Kernel(object):
         return kernel_run
 
 
-def run(corofunc, *args, with_monitor=False, selector=None,
-        debug=None, activations=None, **kernel_extra):
-    '''
+def run(
+    corofunc, *args, with_monitor=False, selector=None, debug=None, activations=None, **kernel_extra
+):
+    """
     Run the curio kernel with an initial task and execute until all
     tasks terminate.  Returns the task's final result (if any). This
     is a convenience function that should primarily be used for
@@ -809,13 +835,13 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     Don't use this function if you're repeatedly launching a lot of
     new tasks to run in curio. Instead, create a Kernel instance and
     use its run() method instead.
-    '''
-    kernel = Kernel(selector=selector, debug=debug, activations=activations,
-                    **kernel_extra)
+    """
+    kernel = Kernel(selector=selector, debug=debug, activations=activations, **kernel_extra)
 
     # Check if a monitor has been requested
-    if with_monitor or 'CURIOMONITOR' in os.environ:
+    if with_monitor or "CURIOMONITOR" in os.environ:
         from .monitor import Monitor
+
         m = Monitor(kernel)
         m.start()
         kernel._call_at_shutdown(m.close)
@@ -823,36 +849,38 @@ def run(corofunc, *args, with_monitor=False, selector=None,
     with kernel:
         return kernel.run(corofunc, *args)
 
+
 # An Activation is used to monitor and effect what happens
 # during task execution in the Curio kernel. They are often used to
 # implement tracers, debuggers, and other diagonistic tools.
 # See curio/debug.py for some specific examples.
 
+
 class Activation:
 
     def activate(self, kernel):
-        '''
+        """
         Called each time the kernel sets up its environment and is ready to run.
         kernel is an instance of the kernel that's executing.
-        '''
+        """
 
     def created(self, task):
-        '''
+        """
         Called immediately after a task has been created.
-        '''
+        """
 
     def running(self, task):
-        '''
+        """
         Called right before the next execution cycle of a task.
-        '''
+        """
 
     def suspended(self, task, trap):
-        '''
+        """
         Called after the task has suspended due to a trap.
-        '''
+        """
 
     def terminated(self, task):
-        '''
+        """
         Called after a task has terminated, but prior to the task
         being collected by any associated join() operation.
-        '''
+        """

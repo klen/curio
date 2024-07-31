@@ -25,7 +25,7 @@
 # selector used by the kernel.  For example, can it detect I/O events
 # on the provided file or socket?  If so, it will probably work here.
 
-__all__ = ['Socket', 'FileStream', 'SocketStream']
+__all__ = ["Socket", "FileStream", "SocketStream"]
 
 # -- Standard Library
 
@@ -46,8 +46,9 @@ from . import thread
 
 try:
     from ssl import SSLWantReadError, SSLWantWriteError
-    WantRead = (BlockingIOError, InterruptedError, SSLWantReadError)
-    WantWrite = (BlockingIOError, InterruptedError, SSLWantWriteError)
+
+    WantRead: tuple = (BlockingIOError, InterruptedError, SSLWantReadError)
+    WantWrite: tuple = (BlockingIOError, InterruptedError, SSLWantWriteError)
 except ImportError:
     WantRead = (BlockingIOError, InterruptedError)
     WantWrite = (BlockingIOError, InterruptedError)
@@ -66,7 +67,7 @@ except ImportError:
 
 
 class _Fd(object):
-    __slots__ = ('fd',)
+    __slots__ = ("fd",)
 
     def __init__(self, fd):
         self.fd = fd
@@ -78,7 +79,7 @@ class _Fd(object):
         return self.fd
 
     def __repr__(self):
-        return f'<fd={self.fd!r}>'
+        return f"<fd={self.fd!r}>"
 
 
 # There is a certain amount of repetition in this class.  It can
@@ -86,11 +87,12 @@ class _Fd(object):
 # other, the KISSS (Keep it Stupid Simple Stupid) principle might be a
 # better policy--just in case someone needs to debug it.
 
+
 class Socket(object):
-    '''
+    """
     Non-blocking wrapper around a socket object.   The original socket is put
     into a non-blocking mode when it's wrapped.
-    '''
+    """
 
     def __init__(self, sock):
         self._socket = sock
@@ -102,7 +104,7 @@ class Socket(object):
         self._socket_recv = sock.recv
 
     def __repr__(self):
-        return f'<curio.Socket {self._socket!r}>'
+        return f"<curio.Socket {self._socket!r}>"
 
     def __getattr__(self, name):
         return getattr(self._socket, name)
@@ -111,7 +113,7 @@ class Socket(object):
         return int(self._fileno)
 
     def settimeout(self, seconds):
-        raise RuntimeError('Use timeout_after() to set a timeout')
+        raise RuntimeError("Use timeout_after() to set a timeout")
 
     def gettimeout(self):
         return None
@@ -120,22 +122,22 @@ class Socket(object):
         return type(self)(self._socket.dup())
 
     def makefile(self, mode, buffering=0, *, encoding=None, errors=None, newline=None):
-        if 'b' not in mode:
-            raise RuntimeError('File can only be created in binary mode')
+        if "b" not in mode:
+            raise RuntimeError("File can only be created in binary mode")
         f = self._socket.makefile(mode, buffering=buffering)
         return FileStream(f)
 
     def as_stream(self):
-        '''
+        """
         Create a stream-based interface to the socket.
-        '''
+        """
         return SocketStream(self._socket)
 
     @contextmanager
     def blocking(self):
-        '''
+        """
         Allow temporary access to the underlying socket in blocking mode
-        '''
+        """
         try:
             self._socket.setblocking(True)
             yield self._socket
@@ -148,7 +150,7 @@ class Socket(object):
                 return self._socket_recv(maxsize, flags)
             except WantRead:
                 await _read_wait(self._fileno)
-            except WantWrite:     # pragma: no cover
+            except WantWrite:  # pragma: no cover
                 await _write_wait(self._fileno)
 
     async def recv_into(self, buffer, nbytes=0, flags=0):
@@ -157,7 +159,7 @@ class Socket(object):
                 return self._socket.recv_into(buffer, nbytes, flags)
             except WantRead:
                 await _read_wait(self._fileno)
-            except WantWrite:     # pragma: no cover
+            except WantWrite:  # pragma: no cover
                 await _write_wait(self._fileno)
 
     async def send(self, data, flags=0):
@@ -166,21 +168,21 @@ class Socket(object):
                 return self._socket_send(data, flags)
             except WantWrite:
                 await _write_wait(self._fileno)
-            except WantRead:      # pragma: no cover
+            except WantRead:  # pragma: no cover
                 await _read_wait(self._fileno)
 
     async def sendall(self, data, flags=0):
-        with memoryview(data).cast('B') as buffer:
+        with memoryview(data).cast("B") as buffer:
             total_sent = 0
             try:
                 while buffer:
                     try:
                         nsent = self._socket_send(buffer, flags)
                         total_sent += nsent
-                        buffer = buffer[nsent:]
+                        buffer = buffer[nsent:]  # noqa: PLW2901
                     except WantWrite:
                         await _write_wait(self._fileno)
-                    except WantRead:   # pragma: no cover
+                    except WantRead:  # pragma: no cover
                         await _read_wait(self._fileno)
             except errors.CancelledError as e:
                 e.bytes_sent = total_sent
@@ -204,15 +206,15 @@ class Socket(object):
     async def connect(self, address):
         try:
             result = self._socket.connect(address)
-            if getattr(self, 'do_handshake_on_connect', False):
+            if getattr(self, "do_handshake_on_connect", False):
                 await self.do_handshake()
             return result
         except WantWrite:
             await _write_wait(self._fileno)
         err = self._socket.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:
-            raise OSError(err, f'Connect call failed {address}')
-        if getattr(self, 'do_handshake_on_connect', False):
+            raise OSError(err, f"Connect call failed {address}")
+        if getattr(self, "do_handshake_on_connect", False):
             await self.do_handshake()
 
     async def recvfrom(self, buffersize, flags=0):
@@ -224,16 +226,16 @@ class Socket(object):
             except WantWrite:
                 await _write_wait(self._fileno)
 
-    async def recvfrom_into(self, buffer, bytes=0, flags=0):
+    async def recvfrom_into(self, buffer, nbytes=0, flags=0):
         while True:
             try:
-                return self._socket.recvfrom_into(buffer, bytes, flags)
+                return self._socket.recvfrom_into(buffer, nbytes, flags)
             except WantRead:
                 await _read_wait(self._fileno)
-            except WantWrite:       # pragma: no cover
+            except WantWrite:  # pragma: no cover
                 await _write_wait(self._fileno)
 
-    async def sendto(self, bytes, flags_or_address, address=None):
+    async def sendto(self, bytes_, flags_or_address, address=None):
         if address:
             flags = flags_or_address
         else:
@@ -241,10 +243,10 @@ class Socket(object):
             flags = 0
         while True:
             try:
-                return self._socket.sendto(bytes, flags, address)
+                return self._socket.sendto(bytes_, flags, address)
             except WantWrite:
                 await _write_wait(self._fileno)
-            except WantRead:      # pragma: no cover
+            except WantRead:  # pragma: no cover
                 await _read_wait(self._fileno)
 
     async def recvmsg(self, bufsize, ancbufsize=0, flags=0):
@@ -315,9 +317,9 @@ MAX_READ = 65536
 
 
 class StreamBase(object):
-    '''
+    """
     Base class for file-like objects.
-    '''
+    """
 
     def __init__(self, fileobj):
         self._file = fileobj
@@ -325,16 +327,16 @@ class StreamBase(object):
         self._buffer = bytearray()
 
     def __repr__(self):
-        return f'<curio.{type(self).__name__} {self._file!r}>'
+        return f"<curio.{type(self).__name__} {self._file!r}>"
 
     def fileno(self):
         return int(self._fileno)
 
     # ---- Methods that must be implemented in child classes
-    async def _read(self, maxbytes=-1):     # pragma: no cover
+    async def _read(self, maxbytes=-1):  # pragma: no cover
         raise NotImplementedError()
 
-    async def write(self, data):            # pragma: no cover
+    async def write(self, data):  # pragma: no cover
         raise NotImplementedError()
 
     # ---- General I/O methods for streams
@@ -361,10 +363,10 @@ class StreamBase(object):
             try:
                 chunk = await self.read(maxread)
             except errors.CancelledError as e:
-                e.bytes_read = b''.join(chunks)
+                e.bytes_read = b"".join(chunks)
                 raise
             if not chunk:
-                return b''.join(chunks)
+                return b"".join(chunks)
             chunks.append(chunk)
             if len(chunk) == maxread:
                 maxread *= 2
@@ -375,25 +377,25 @@ class StreamBase(object):
             try:
                 chunk = await self.read(nbytes)
             except errors.CancelledError as e:
-                e.bytes_read = b''.join(chunks)
+                e.bytes_read = b"".join(chunks)
                 raise
             if not chunk:
-                e = EOFError('Unexpected end of data')
-                e.bytes_read = b''.join(chunks)
+                e = EOFError("Unexpected end of data")  # type: ignore[misc]
+                e.bytes_read = b"".join(chunks)
                 raise e
             chunks.append(chunk)
             nbytes -= len(chunk)
-        return b''.join(chunks)
+        return b"".join(chunks)
 
     async def readinto(self, memory):
-        with memoryview(memory).cast('B') as view:
+        with memoryview(memory).cast("B") as view:
             remaining = len(view)
             total_read = 0
 
             # It's possible that there is data already buffered on this stream.
             # If so, we have to copy into the memory buffer first.
             buffered = len(self._buffer)
-            tocopy = remaining if (remaining < buffered) else buffered
+            tocopy = min(buffered, remaining)
             if tocopy:
                 view[:tocopy] = self._buffer[:tocopy]
                 del self._buffer[:tocopy]
@@ -404,7 +406,7 @@ class StreamBase(object):
             # bytes up to the buffer size.
             while remaining > 0:
                 try:
-                    nrecv = self._readinto_impl(view[total_read:total_read+remaining])
+                    nrecv = self._readinto_impl(view[total_read : total_read + remaining])
 
                     # On proper file objects, None might be returned to indicate blocking
                     if nrecv is None:
@@ -422,13 +424,13 @@ class StreamBase(object):
 
     async def readline(self, maxlen=None):
         while True:
-            nl_index = self._buffer.find(b'\n')
+            nl_index = self._buffer.find(b"\n")
             if nl_index >= 0:
-                resp = bytes(self._buffer[:nl_index + 1])
-                del self._buffer[:nl_index + 1]
+                resp = bytes(self._buffer[: nl_index + 1])
+                del self._buffer[: nl_index + 1]
                 return resp
             data = await self._read(MAX_READ)
-            if data == b'':
+            if data == b"":
                 resp = bytes(self._buffer)
                 self._buffer.clear()
                 return resp
@@ -438,7 +440,7 @@ class StreamBase(object):
         lines = []
         try:
             async for line in self:
-                lines.append(line)
+                lines.append(line)  # noqa: PERF401
             return lines
         except errors.CancelledError as e:
             e.lines_read = lines
@@ -501,28 +503,28 @@ class StreamBase(object):
 
 
 class FileStream(StreamBase):
-    '''
+    """
     Wrapper around a file-like object.  File is put into non-blocking mode.
     The underlying file must be in binary mode.
-    '''
+    """
 
     def __init__(self, fileobj):
-        assert not isinstance(fileobj, io.TextIOBase), 'Only binary mode files allowed'
+        assert not isinstance(fileobj, io.TextIOBase), "Only binary mode files allowed"
         super().__init__(fileobj)
         os.set_blocking(int(self._fileno), False)
 
         # Common bound methods
         self._file_read = fileobj.read
-        self._readinto_impl = getattr(fileobj, 'readinto', None)
+        self._readinto_impl = getattr(fileobj, "readinto", None)
         self._file_write = fileobj.write
 
     @contextmanager
     def blocking(self):
-        '''
+        """
         Allow temporary access to the underlying file in blocking mode
-        '''
+        """
         if self._buffer:
-            raise IOError('There is unread buffered data.')
+            raise IOError("There is unread buffered data.")
         try:
             os.set_blocking(int(self._fileno), True)
             yield self._file
@@ -546,7 +548,7 @@ class FileStream(StreamBase):
 
     async def write(self, data):
         nwritten = 0
-        view = memoryview(data).cast('B')
+        view = memoryview(data).cast("B")
         try:
             while view:
                 try:
@@ -556,11 +558,11 @@ class FileStream(StreamBase):
                     nwritten += nbytes
                     view = view[nbytes:]
                 except WantWrite as e:
-                    if hasattr(e, 'characters_written'):
+                    if hasattr(e, "characters_written"):
                         nwritten += e.characters_written
-                        view = view[e.characters_written:]
+                        view = view[e.characters_written :]
                     await _write_wait(self._fileno)
-                except WantRead:   # pragma: no cover
+                except WantRead:  # pragma: no cover
                     await _read_wait(self._fileno)
             return nwritten
 
@@ -570,7 +572,7 @@ class FileStream(StreamBase):
 
     async def flush(self):
         if not self._file:
-            return
+            return None
         while True:
             try:
                 return self._file.flush()
@@ -581,9 +583,9 @@ class FileStream(StreamBase):
 
 
 class SocketStream(StreamBase):
-    '''
+    """
     Stream wrapper for a socket.
-    '''
+    """
 
     def __init__(self, sock):
         super().__init__(sock)
@@ -596,14 +598,14 @@ class SocketStream(StreamBase):
 
     @contextmanager
     def blocking(self):
-        '''
+        """
         Allow temporary access to the underlying file in blocking mode
-        '''
+        """
         if self._buffer:
-            raise IOError('There is unread buffered data.')
+            raise IOError("There is unread buffered data.")
         try:
             self._file.setblocking(True)
-            yield open(int(self._fileno), 'rb+', buffering=0, closefd=False)
+            yield open(int(self._fileno), "rb+", buffering=0, closefd=False)
         finally:
             self._file.setblocking(False)
 
@@ -614,12 +616,12 @@ class SocketStream(StreamBase):
                 return data
             except WantRead:
                 await _read_wait(self._fileno)
-            except WantWrite:        # pragma: no cover
+            except WantWrite:  # pragma: no cover
                 await _write_wait(self._fileno)
 
     async def write(self, data):
         nwritten = 0
-        view = memoryview(data).cast('B')
+        view = memoryview(data).cast("B")
         try:
             while view:
                 try:
@@ -628,10 +630,9 @@ class SocketStream(StreamBase):
                     view = view[nbytes:]
                 except WantWrite:
                     await _write_wait(self._fileno)
-                except WantRead:     # pragma: no cover
+                except WantRead:  # pragma: no cover
                     await _read_wait(self._fileno)
             return nwritten
         except errors.CancelledError as e:
             e.bytes_written = nwritten
             raise
-

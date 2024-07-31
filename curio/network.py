@@ -4,12 +4,19 @@
 # based on their similar counterparts in the asyncio library. Some of the
 # fiddly low-level bits are borrowed.
 
-__all__ = [ 'open_connection', 'tcp_server', 'tcp_server_socket',
-            'open_unix_connection', 'unix_server', 'unix_server_socket' ]
+__all__ = [
+    "open_connection",
+    "tcp_server",
+    "tcp_server_socket",
+    "open_unix_connection",
+    "unix_server",
+    "unix_server_socket",
+]
 
 # -- Standard library
 
 import logging
+
 log = logging.getLogger(__name__)
 
 # -- Curio
@@ -35,10 +42,7 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
             # Assume that ssl is an already created context
             sslcontext = ssl
 
-        if server_hostname:
-            extra_args = {'server_hostname': server_hostname}
-        else:
-            extra_args = {}
+        extra_args = {"server_hostname": server_hostname} if server_hostname else {}
 
         # if the context is Curio's own, it expects a Curio socket and
         # returns one. If context is from an external source, including
@@ -54,18 +58,20 @@ async def _wrap_ssl_client(sock, ssl, server_hostname, alpn_protocols):
         else:
             # do_handshake_on_connect should not be specified for
             # non-blocking sockets
-            extra_args['do_handshake_on_connect'] = sock._socket.gettimeout() != 0.0
+            extra_args["do_handshake_on_connect"] = sock._socket.gettimeout() != 0.0
             sock = Socket(sslcontext.wrap_socket(sock._socket, **extra_args))
         await sock.do_handshake()
     return sock
 
-async def open_connection(host, port, *, ssl=None, source_addr=None, server_hostname=None,
-                          alpn_protocols=None):
-    '''
+
+async def open_connection(
+    host, port, *, ssl=None, source_addr=None, server_hostname=None, alpn_protocols=None
+):
+    """
     Create a TCP connection to a given Internet host and port with optional SSL applied to it.
-    '''
+    """
     if server_hostname and not ssl:
-        raise ValueError('server_hostname is only applicable with SSL')
+        raise ValueError("server_hostname is only applicable with SSL")
 
     sock = await socket.create_connection((host, port), source_address=source_addr)
 
@@ -79,10 +85,10 @@ async def open_connection(host, port, *, ssl=None, source_addr=None, server_host
         sock._socket.close()
         raise
 
-async def open_unix_connection(path, *, ssl=None, server_hostname=None,
-                               alpn_protocols=None):
+
+async def open_unix_connection(path, *, ssl=None, server_hostname=None, alpn_protocols=None):
     if server_hostname and not ssl:
-        raise ValueError('server_hostname is only applicable with SSL')
+        raise ValueError("server_hostname is only applicable with SSL")
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
@@ -97,9 +103,10 @@ async def open_unix_connection(path, *, ssl=None, server_hostname=None,
         sock._socket.close()
         raise
 
+
 async def run_server(sock, client_connected_task, ssl=None):
-    if ssl and not hasattr(ssl, 'wrap_socket'):
-        raise ValueError('ssl argument must have a wrap_socket method')
+    if ssl and not hasattr(ssl, "wrap_socket"):
+        raise ValueError("ssl argument must have a wrap_socket method")
 
     async def run_client(client, addr):
         async with client:
@@ -110,24 +117,29 @@ async def run_server(sock, client_connected_task, ssl=None):
             client, addr = await sock.accept()
             if ssl:
                 if isinstance(ssl, curiossl.CurioSSLContext):
-                    client = await ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                    client = await ssl.wrap_socket(
+                        client, server_side=True, do_handshake_on_connect=False
+                    )
                 else:
-                    client = ssl.wrap_socket(client, server_side=True, do_handshake_on_connect=False)
+                    client = ssl.wrap_socket(
+                        client, server_side=True, do_handshake_on_connect=False
+                    )
                 if not isinstance(client, Socket):
                     client = Socket(client)
             await group.spawn(run_client, client, addr)
             del client
 
-    async with sock:
-        async with TaskGroup() as tg:
-            await tg.spawn(run_server, sock, tg)
-            # Reap all of the children tasks as they complete
-            async for task in tg:
-                task.joined = True
-                del task
+    async with sock, TaskGroup() as tg:
+        await tg.spawn(run_server, sock, tg)
+        # Reap all of the children tasks as they complete
+        async for task in tg:
+            task.joined = True
+            del task
 
-def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
-                      reuse_address=True, reuse_port=False):
+
+def tcp_server_socket(
+    host, port, family=socket.AF_INET, backlog=100, reuse_address=True, reuse_port=False
+):
 
     sock = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -137,8 +149,8 @@ def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
         if reuse_port:
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, True)
-            except (AttributeError, OSError) as e:
-                log.warning('reuse_port=True option failed', exc_info=True)
+            except (AttributeError, OSError):
+                log.warning("reuse_port=True option failed", exc_info=True)
 
         sock.bind((host, port))
         sock.listen(backlog)
@@ -148,12 +160,22 @@ def tcp_server_socket(host, port, family=socket.AF_INET, backlog=100,
 
     return sock
 
-async def tcp_server(host, port, client_connected_task, *,
-                     family=socket.AF_INET, backlog=100, ssl=None,
-                     reuse_address=True, reuse_port=False):
+
+async def tcp_server(
+    host,
+    port,
+    client_connected_task,
+    *,
+    family=socket.AF_INET,
+    backlog=100,
+    ssl=None,
+    reuse_address=True,
+    reuse_port=False,
+):
 
     sock = tcp_server_socket(host, port, family, backlog, reuse_address, reuse_port)
     await run_server(sock, client_connected_task, ssl)
+
 
 def unix_server_socket(path, backlog=100):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -164,6 +186,7 @@ def unix_server_socket(path, backlog=100):
         sock._socket.close()
         raise
     return sock
+
 
 async def unix_server(path, client_connected_task, *, backlog=100, ssl=None):
     sock = unix_server_socket(path, backlog)

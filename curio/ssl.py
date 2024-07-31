@@ -2,7 +2,7 @@
 #
 # Wrapper around built-in SSL module
 
-__all__ = []
+__all__: list = []
 
 # -- Standard Library
 
@@ -12,14 +12,15 @@ try:
     import ssl as _ssl
     from ssl import *
 except ImportError:
-    _ssl = None
+    _ssl = None  # type: ignore[assignment]
 
     # We need these exceptions defined, even if ssl is not available.
-    class SSLWantReadError(Exception):
+    class SSLWantReadError(Exception):  # type: ignore[no-redef]
         pass
 
-    class SSLWantWriteError(Exception):
+    class SSLWantWriteError(Exception):  # type: ignore[no-redef]
         pass
+
 
 # -- Curio
 
@@ -27,6 +28,7 @@ from .workers import run_in_thread
 from .io import Socket
 
 if _ssl:
+
     @wraps(_ssl.SSLContext.wrap_socket)
     async def wrap_socket(sock, *args, do_handshake_on_connect=True, **kwargs):
         if isinstance(sock, Socket):
@@ -54,7 +56,8 @@ if _ssl:
 
         async def wrap_socket(self, sock, *args, do_handshake_on_connect=True, **kwargs):
             sock = self._context.wrap_socket(
-                sock._socket, *args, do_handshake_on_connect=False, **kwargs)
+                sock._socket, *args, do_handshake_on_connect=False, **kwargs
+            )
             csock = Socket(sock)
             csock.do_handshake_on_connect = do_handshake_on_connect
             if do_handshake_on_connect and sock._connected:
@@ -62,13 +65,13 @@ if _ssl:
             return csock
 
         def __setattr__(self, name, value):
-            if name == '_context':
+            if name == "_context":
                 super().__setattr__(name, value)
             else:
                 setattr(self._context, name, value)
 
     # Name alias
-    def SSLContext(protocol):
+    def SSLContext(protocol):  # type: ignore[no-redef]
         return CurioSSLContext(_ssl.SSLContext(protocol))
 
     @wraps(_ssl.create_default_context)

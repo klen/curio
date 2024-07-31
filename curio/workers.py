@@ -3,7 +3,7 @@
 # Functions for performing work outside of curio.  This includes
 # running functions in threads and processes.
 
-__all__ = ['run_in_thread', 'run_in_process']
+__all__ = ["run_in_thread", "run_in_process"]
 
 # -- Standard Library
 
@@ -25,6 +25,7 @@ from .channel import Connection
 # confusion when reading the traceback message (it will identify itself
 # as originating from curio as opposed to multiprocessing.pool).
 
+
 class RemoteTraceback(Exception):
     def __init__(self, tb):
         self.tb = tb
@@ -36,7 +37,7 @@ class RemoteTraceback(Exception):
 class ExceptionWithTraceback:
     def __init__(self, exc, tb):
         tb = traceback.format_exception(type(exc), exc, tb)
-        tb = ''.join(tb)
+        tb = "".join(tb)
         self.exc = exc
         self.tb = '\n"""\n%s"""' % tb
 
@@ -51,28 +52,30 @@ def rebuild_exc(exc, tb):
 
 MAX_WORKER_THREADS = 64
 
+
 async def reserve_thread_worker():
-    '''
+    """
     Reserve a thread pool worker
-    '''
+    """
     kernel = await _get_kernel()
-    if not hasattr(kernel, 'thread_pool'):
+    if not hasattr(kernel, "thread_pool"):
         kernel.thread_pool = WorkerPool(ThreadWorker, MAX_WORKER_THREADS)
         kernel._call_at_shutdown(kernel.thread_pool.shutdown)
-    return (await kernel.thread_pool.reserve())
+    return await kernel.thread_pool.reserve()
 
-async def run_in_thread(callable, *args, call_on_cancel=None):
-    '''
+
+async def run_in_thread(callable_, *args, call_on_cancel=None):
+    """
     Run callable(*args) in a separate thread and return the result. If
     cancelled, be aware that the requested callable may or may not have
     executed.  If it start running, it will run fully to completion
     as a kind of zombie.
-    '''
+    """
     assert call_on_cancel is None, call_on_cancel
     worker = None
     try:
         worker = await reserve_thread_worker()
-        return await worker.apply(callable, args, call_on_cancel)
+        return await worker.apply(callable_, args, call_on_cancel)
     finally:
         if worker:
             await worker.release()
@@ -80,8 +83,9 @@ async def run_in_thread(callable, *args, call_on_cancel=None):
 
 MAX_WORKER_PROCESSES = multiprocessing.cpu_count()
 
-async def run_in_process(callable, *args):
-    '''
+
+async def run_in_process(callable_, *args):
+    """
     Run callable(*args) in a separate process and return the
     result.  In the event of cancellation, the worker process is
     immediately terminated.
@@ -103,18 +107,19 @@ async def run_in_process(callable, *args):
     The worker process is a separate isolated Python interpreter.
     Nothing should be assumed about its global state including shared
     variables, files, or connections.
-    '''
+    """
     kernel = await _get_kernel()
-    if not hasattr(kernel, 'process_pool'):
+    if not hasattr(kernel, "process_pool"):
         kernel.process_pool = WorkerPool(ProcessWorker, MAX_WORKER_PROCESSES)
         kernel._call_at_shutdown(kernel.process_pool.shutdown)
     worker = None
     try:
         worker = await kernel.process_pool.reserve()
-        return await worker.apply(callable, args)
+        return await worker.apply(callable_, args)
     finally:
         if worker:
             await worker.release()
+
 
 # The _FutureLess class is a custom "Future" implementation solely for
 # use by curio. It is used by the ThreadWorker class below and
@@ -127,7 +132,7 @@ async def run_in_process(callable, *args):
 
 
 class _FutureLess(object):
-    __slots__ = ('_callback', '_exception', '_result')
+    __slots__ = ("_callback", "_exception", "_result")
 
     def set_result(self, result):
         self._result = result
@@ -149,6 +154,7 @@ class _FutureLess(object):
     def cancel(self):
         pass
 
+
 # A ThreadWorker represents a thread that performs work on behalf of a
 # curio task.   A curio task initiates work by executing the
 # apply() method. This passes the request to a background thread that
@@ -157,9 +163,9 @@ class _FutureLess(object):
 
 
 class ThreadWorker(object):
-    '''
+    """
     Worker that executes a callable on behalf of a curio task in a separate thread.
-    '''
+    """
 
     def __init__(self, pool):
         self.thread = None
@@ -197,9 +203,9 @@ class ThreadWorker(object):
             self.start_evt.set()
 
     async def apply(self, func, args=(), call_on_cancel=None):
-        '''
+        """
         Run the callable func in a separate thread and return the result.
-        '''
+        """
         if self.thread is None:
             self._launch()
 
@@ -212,7 +218,7 @@ class ThreadWorker(object):
         def run_callable():
             try:
                 future.set_result(func(*args))
-            except BaseException as err:
+            except BaseException as err:  # noqa: BLE001
                 future.set_exception(err)
             finally:
                 done_evt.wait()
@@ -223,21 +229,23 @@ class ThreadWorker(object):
         try:
             await _future_wait(future, self.start_evt)
             return future.result()
-        except CancelledError as e:
+        except CancelledError:
             cancelled = True
             self.shutdown()
             raise
         finally:
             done_evt.set()
 
+
 class ProcessWorker(object):
-    '''
+    """
     Managed process worker for running CPU-intensive tasks.  The main
     purpose of this class is to run workers with reliable
     cancellation/timeout semantics. Specifically, if a worker is
     cancelled, the underlying process is also killed.   This, as
     opposed to having it linger on running until work is complete.
-    '''
+    """
+
     def __init__(self, pool):
         self.process = None
         self.client_ch = None
@@ -245,10 +253,9 @@ class ProcessWorker(object):
         self.pool = pool
 
     def _launch(self):
-        context = multiprocessing.get_context('spawn')
+        context = multiprocessing.get_context("spawn")
         client_ch, server_ch = context.Pipe()
-        self.process = context.Process(
-            target=self.run_server, args=(server_ch, ), daemon=True)
+        self.process = context.Process(target=self.run_server, args=(server_ch,), daemon=True)
         self.process.start()
         server_ch.close()
         self.client_ch = Connection.from_Connection(client_ch)
@@ -272,7 +279,7 @@ class ProcessWorker(object):
             try:
                 result = func(*args)
                 ch.send((True, result))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 e = ExceptionWithTraceback(e, e.__traceback__)
                 ch.send((False, e))
             del func, args
@@ -293,14 +300,14 @@ class ProcessWorker(object):
             self.shutdown()
             raise
 
+
 # Windows-compatible process worker.  It differs from ProcessWorker in
 # that client communication is handled synchronously by a thread.
 class WinProcessWorker(ProcessWorker):
     def _launch(self):
-        context = multiprocessing.get_context('spawn')
+        context = multiprocessing.get_context("spawn")
         client_ch, server_ch = context.Pipe()
-        self.process = context.Process(
-            target=self.run_server, args=(server_ch, ), daemon=True)
+        self.process = context.Process(target=self.run_server, args=(server_ch,), daemon=True)
         self.process.start()
         server_ch.close()
         self.client_ch = client_ch
@@ -324,7 +331,8 @@ class WinProcessWorker(ProcessWorker):
             self.shutdown()
             raise
 
-if sys.platform.startswith('win'):
+
+if sys.platform.startswith("win"):
     ProcessWorker = WinProcessWorker
 
 # Pool of workers for carrying out jobs on behalf of curio tasks.
@@ -353,6 +361,7 @@ if sys.platform.startswith('win'):
 # on the same thread.  By reserving/releasing workers, we get more
 # control over the whole process of how workers get managed.
 
+
 class WorkerPool(object):
     def __init__(self, workercls, nworkers):
         self.nworkers = sync.Semaphore(nworkers)
@@ -375,4 +384,3 @@ class WorkerPool(object):
         if not worker.terminated:
             self.workers.append(worker)
         await self.nworkers.release()
-

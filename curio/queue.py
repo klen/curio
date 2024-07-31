@@ -15,17 +15,18 @@ import asyncio
 
 from .traps import _future_wait
 from .sched import SchedFIFO, SchedBarrier
-from .errors import CurioError, CancelledError
+from .errors import CancelledError
 from .meta import awaitable, asyncioable
 from . import workers
 
-__all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'UniversalQueue']
+__all__ = ["Queue", "PriorityQueue", "LifoQueue", "UniversalQueue"]
+
 
 class QueueBase:
-    '''
+    """
     Base class for queues used to communicate between Curio tasks.
     Not safe for use with external threads or processes.
-    '''
+    """
 
     def __init__(self, maxsize=0):
         self.maxsize = maxsize
@@ -37,7 +38,7 @@ class QueueBase:
 
     def __repr__(self):
         res = super().__repr__()
-        return '<%s, len=%d>' % (res[1:-1], len(self._queue))
+        return "<%s, len=%d>" % (res[1:-1], len(self._queue))
 
     def empty(self):
         return not self._queue
@@ -49,7 +50,7 @@ class QueueBase:
         must_wait = bool(self._get_waiting)
         while must_wait or self.empty():
             must_wait = False
-            await self._get_waiting.suspend('QUEUE_GET')
+            await self._get_waiting.suspend("QUEUE_GET")
 
         result = self._get_item()
 
@@ -59,11 +60,11 @@ class QueueBase:
 
     async def join(self):
         if self._task_count > 0:
-            await self._join_waiting.suspend('QUEUE_JOIN')
+            await self._join_waiting.suspend("QUEUE_JOIN")
 
     async def put(self, item):
         while self.full():
-            await self._put_waiting.suspend('QUEUE_PUT')
+            await self._put_waiting.suspend("QUEUE_PUT")
         self._put_item(item)
         self._task_count += 1
         if self._get_waiting:
@@ -91,11 +92,12 @@ class QueueBase:
 # done.  If it doesn't work, you get a Future and you wait on it
 # using whatever mechanism the runtime environment uses to do that.
 
+
 class UniversalQueueBase:
-    '''
+    """
     A queue for communicating between Curio and external threads,
     including foreign event loops running in different threads.
-    '''
+    """
 
     def __init__(self, *, maxsize=0, withfd=False):
         self.maxsize = maxsize
@@ -142,7 +144,7 @@ class UniversalQueueBase:
     def _put_send(self):
         if self._put_sock:
             try:
-                self._put_sock.send(b'\x01')
+                self._put_sock.send(b"\x01")
             except BlockingIOError:
                 pass
 
@@ -184,23 +186,25 @@ class UniversalQueueBase:
         return item
 
     # Asynchronous queue get (Curio)
-    @awaitable(get)
+    @awaitable(get)  # type: ignore[no-redef]
     async def get(self):
         item, fut = self._get()
         if fut:
             try:
                 await _future_wait(fut)
                 item = fut.result()
-            except CancelledError as e:
+            except CancelledError:
                 # If we're cancelled, but the future completes successfully anyways,
                 # we must arrange for the item to go back onto the queue.  Note:
                 # the Curio kernel cancels futures when _future_wait() is cancelled.
-                fut.add_done_callback(lambda f: self._put(f.result(), True) if not f.cancelled() else None)
+                fut.add_done_callback(
+                    lambda f: self._put(f.result(), True) if not f.cancelled() else None
+                )
                 raise
         return item
 
     # Asynchronous queue get (Asyncio)
-    @asyncioable(get)
+    @asyncioable(get)  # type: ignore[no-redef]
     async def get(self):
         item, fut = self._get()
         if fut:
@@ -252,7 +256,7 @@ class UniversalQueueBase:
             fut.result()
 
     # Asynchronous put. For Curio
-    @awaitable(put)
+    @awaitable(put)  # type: ignore[no-redef]
     async def put(self, item):
         while True:
             fut = self._put(item)
@@ -263,11 +267,13 @@ class UniversalQueueBase:
             except CancelledError:
                 # If we're cancelled, but the future completes, it means that the getter alerted
                 # a task that space was available, but the alert is lost.  We renotify any waiters.
-                fut.add_done_callback(lambda fut: self._put_notify() if not fut.cancelled() else None)
+                fut.add_done_callback(
+                    lambda fut: self._put_notify() if not fut.cancelled() else None
+                )
                 raise
 
     # Asynchronous put. For Asyncio.
-    @asyncioable(put)
+    @asyncioable(put)  # type: ignore[no-redef]
     async def put(self, item):
         while True:
             fut = self._put(item)
@@ -278,7 +284,7 @@ class UniversalQueueBase:
     def task_done_sync(self):
         with self._all_tasks_done:
             self._unfinished_tasks -= 1
-            assert self._unfinished_tasks >= 0, 'task_done called too many times'
+            assert self._unfinished_tasks >= 0, "task_done called too many times"
             if self._unfinished_tasks <= 0:
                 self._all_tasks_done.notify_all()
 
@@ -295,7 +301,7 @@ class UniversalQueueBase:
     async def join(self):
         return await workers.run_in_thread(self.join_sync)
 
-    @asyncioable(join)
+    @asyncioable(join)  # type: ignore[no-redef]
     async def join(self):
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, self.join_sync)
@@ -303,6 +309,7 @@ class UniversalQueueBase:
 
 # The following classes implement the low-level queue data structure
 # and policies for adding and removing items.
+
 
 class FIFOImpl:
 
@@ -346,39 +353,36 @@ class LIFOImpl:
 
     _unget_item = _put_item
 
+
 # Concrete Queue implementations
 
+
 class Queue(QueueBase, FIFOImpl):
-    '''
+    """
     A First-In First-Out queue for communicating between Curio tasks.
     not safe for communicating between Curio and external
     threads, processes, etc.
-    '''
-    pass
+    """
+
 
 class PriorityQueue(QueueBase, PriorityImpl):
-    '''
+    """
     A priority queue for communicating between Curio tasks.
     not safe for communicating between Curio and external
     threads, processes, etc.
-    '''
-    pass
+    """
 
 
 class LifoQueue(QueueBase, LIFOImpl):
-    '''
+    """
     A Last-In First-Out queue for communicating between Curio tasks.
     Not safe for communicating between Curio and external
     threads, processes, etc.
-    '''
-    pass
+    """
 
 
 class UniversalQueue(UniversalQueueBase, FIFOImpl):
-    '''
+    """
     A FIFO queue for communicating between Curio and external threads,
     including foreign event loops running in different threads.
-    '''
-    pass
-
-
+    """

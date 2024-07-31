@@ -8,14 +8,14 @@ import types
 import warnings
 import threading
 import signal
-import os
 
-assert (sys.version_info.major >= 3 and sys.version_info.minor >= 8), "console requires Python 3.8+"
+assert sys.version_info >= (3, 8), "console requires Python 3.8+"
+
 
 class CurioIOInteractiveConsole(code.InteractiveConsole):
 
-    def __init__(self, locals):
-        super().__init__(locals)
+    def __init__(self, locals_):
+        super().__init__(locals_)
         self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
         self.requests = curio.UniversalQueue()
         self.response = curio.UniversalQueue()
@@ -32,7 +32,7 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
                     coro = func()
                 finally:
                     signal.signal(signal.SIGINT, hand)
-            except BaseException as ex:
+            except BaseException as ex:  # noqa: BLE001
                 await self.response.put((None, ex))
                 return
             if not inspect.iscoroutine(coro):
@@ -44,6 +44,7 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
             async def watch_ctrl_c(evt, repl_task):
                 await evt.wait()
                 await repl_task.cancel()
+
             evt = curio.UniversalEvent()
             try:
                 hand = signal.signal(signal.SIGINT, lambda signo, frame: evt.set())
@@ -54,7 +55,7 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
                     response = (result, None)
                 except SystemExit:
                     raise
-                except BaseException as e:
+                except BaseException as e:  # noqa: BLE001
                     await repl_task.wait()
                     response = (None, e.__cause__)
                 await watch_task.cancel()
@@ -68,7 +69,7 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
         if exc is not None:
             try:
                 raise exc
-            except BaseException:
+            except BaseException:  # noqa: BLE001
                 self.showtraceback()
         else:
             return result
@@ -85,33 +86,31 @@ class CurioIOInteractiveConsole(code.InteractiveConsole):
         finally:
             signal.signal(signal.SIGINT, hand)
 
+
 def run_repl(console):
     try:
         banner = (
-            f'curio REPL {sys.version} on {sys.platform}\n'
+            f"curio REPL {sys.version} on {sys.platform}\n"
             f'Use "await" directly instead of "curio.run()".\n'
             f'Type "help", "copyright", "credits" or "license" '
-            f'for more information.\n'
+            f"for more information.\n"
             f'{getattr(sys, "ps1", ">>> ")}import curio'
-            )
-        console.interact(
-            banner=banner,
-            exitmsg='exiting curio REPL...')
+        )
+        console.interact(banner=banner, exitmsg="exiting curio REPL...")
     finally:
         warnings.filterwarnings(
-            'ignore',
-            message=r'^coroutine .* was never awaited$',
-            category=RuntimeWarning)
+            "ignore", message=r"^coroutine .* was never awaited$", category=RuntimeWarning
+        )
         console.requests.put(None)
-    
-if __name__ == '__main__':
-    repl_locals = { 'curio': curio,
-                    'ps': curio.monitor.ps,
-                    'where': curio.monitor.where,
+
+
+if __name__ == "__main__":
+    repl_locals = {
+        "curio": curio,
+        "ps": curio.monitor.ps,
+        "where": curio.monitor.where,
     }
-    for key in {'__name__', '__package__',
-                '__loader__', '__spec__',
-                '__builtins__', '__file__'}:
+    for key in ("__name__", "__package__", "__loader__", "__spec__", "__builtins__", "__file__"):
         repl_locals[key] = locals()[key]
 
     console = CurioIOInteractiveConsole(repl_locals)

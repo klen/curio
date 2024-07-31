@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "curio"
+description = "Curio is a coroutine-based library for concurrent systems programming."
+readme = "README.rst"
+license = { "text" = "BSD" }
+version = "1.6"
+requires-python = ">=3.8"
+authors = [{ name = "David Beazley", email = "dave@dabeaz.com" }]
+classifiers = ["Programming Language :: Python :: 3", "Framework :: Pytest", "Framework :: Curio"]
+
+[project.urls]
+homepage = "https://github.com/dabeaz/curio"
+repository = "https://github.com/dabeaz/curio"
+
+[project.optional-dependencies]
+test = ["pytest", "Sphinx", "ruff", "mypy", "pre-commit"]
+
+[tool.setuptools]
+packages = ['curio']
+
+[tool.pytest.ini_options]
+addopts = "-xsv tests"
+markers = [
+  "internet: mark tests as requiring internet connectivity (deselect with '-m \"not internet\"')",
+]
+
+[tool.mypy]
+packages = ["curio"]
+install_types = true
+non_interactive = true
+ignore_missing_imports = true
+
+[tool.ruff]
+fix = false
+line-length = 120
+target-version = "py39"
+exclude = [".venv", "examples"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "ANN",
+  "ARG",
+  "B007",
+  "B904",
+  "COM",
+  "C901",
+  "D",
+  "DJ",
+  "EM",
+  "E402",
+  "FBT",
+  "FIX002",
+  "F403",
+  "F405",
+  "I001",
+  "PLR0912",
+  "PLR0913",
+  "PLR0915",
+  "PLR2004",
+  "PT018",
+  "PTH123",
+  "PERF203",
+  "N",
+  "RSE",
+  "RET",
+  "RUF002",
+  "S101",
+  "S301",
+  "SIM105",
+  "SIM115",
+  "SLF",
+  "TD",
+  "TRY003",
+  "TRY300",
+  "TRY301",
+  "UP",
+  "ERA",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["ARG", "TRY", "F", "PGH", "PLR", "PLW", "PTH", "RET504", "SIM"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+preview = true

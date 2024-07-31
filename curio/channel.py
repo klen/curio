@@ -4,7 +4,7 @@
 # Python objects on a stream.  Compatible with the Connection class in the
 # multiprocessing module, but rewritten for a purely asynchronous runtime.
 
-__all__ = ['Channel']
+__all__ = ["Channel"]
 
 # -- Standard Library
 
@@ -23,25 +23,24 @@ from . import socket
 from .errors import CurioError, TaskTimeout
 from .io import StreamBase, FileStream
 from . import thread
-from .time import timeout_after, sleep
+from .time import timeout_after
 
 # Authentication parameters (copied from multiprocessing)
 
-AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH    # 20
+AUTH_MESSAGE_LENGTH = mpc.MESSAGE_LENGTH  # type: ignore[attr-defined]
 try:
     # Python 3.12+
-    CHALLENGE = mpc._CHALLENGE              # b'#CHALLENGE#'
-    WELCOME = mpc._WELCOME                  # b'#WELCOME#'
-    FAILURE = mpc._FAILURE                  # b'#FAILURE#'
+    CHALLENGE = mpc._CHALLENGE  # type: ignore[attr-defined]
+    WELCOME = mpc._WELCOME  # type: ignore[attr-defined]
+    FAILURE = mpc._FAILURE  # type: ignore[attr-defined]
 except AttributeError:
     # Python 3.7-3.11
-    CHALLENGE = mpc.CHALLENGE               # b'#CHALLENGE#'
-    WELCOME = mpc.WELCOME                   # b'#WELCOME#'
-    FAILURE = mpc.FAILURE                   # b'#FAILURE#'
+    CHALLENGE = mpc.CHALLENGE  # type: ignore[attr-defined]
+    WELCOME = mpc.WELCOME  # type: ignore[attr-defined]
+    FAILURE = mpc.FAILURE  # type: ignore[attr-defined]
 
 
-
-class ConnectionError(CurioError):
+class ConnectionError(CurioError):  # noqa: A001
     pass
 
 
@@ -50,11 +49,11 @@ class AuthenticationError(ConnectionError):
 
 
 class Connection(object):
-    '''
+    """
     A communication channel for sending size-prefixed messages of bytes
     or pickled Python objects.  Must be passed a pair of reader/writer
     streams for performing the underlying communication.
-    '''
+    """
 
     def __init__(self, reader, writer):
         assert isinstance(reader, StreamBase) and isinstance(writer, StreamBase)
@@ -63,7 +62,7 @@ class Connection(object):
 
     @classmethod
     def from_Connection(cls, conn):
-        '''
+        """
         Creates a channel from a multiprocessing Connection. Note: The
         multiprocessing connection is detached by having its handle set to None.
 
@@ -74,10 +73,10 @@ class Connection(object):
               p1 = Connection.from_Connection(p1)
               p2 = Connection.from_Connection(p2)
 
-        '''
+        """
         assert isinstance(conn, mpc._ConnectionBase)
-        reader = FileStream(open(conn._handle, 'rb', buffering=0))
-        writer = FileStream(open(conn._handle, 'wb', buffering=0, closefd=False))
+        reader = FileStream(open(conn._handle, "rb", buffering=0))
+        writer = FileStream(open(conn._handle, "wb", buffering=0, closefd=False))
         conn._handle = None
         return cls(reader, writer)
 
@@ -99,9 +98,9 @@ class Connection(object):
             await self._writer.close()
 
     async def send_bytes(self, buf, offset=0, size=None):
-        '''
+        """
         Send a buffer of bytes as a single message
-        '''
+        """
         m = memoryview(buf)
         if m.itemsize > 1:
             m = memoryview(bytes(m))
@@ -117,34 +116,34 @@ class Connection(object):
         elif offset + size > n:
             raise ValueError("buffer length < offset + size")
 
-        header = struct.pack('!i', size)
+        header = struct.pack("!i", size)
         if size >= 16384:
             await self._writer.write(header)
-            await self._writer.write(m[offset:offset + size])
+            await self._writer.write(m[offset : offset + size])
         else:
-            msg = header + bytes(m[offset:offset + size])
+            msg = header + bytes(m[offset : offset + size])
             await self._writer.write(msg)
         return size
 
     async def recv_bytes(self, maxlength=None):
-        '''
+        """
         Receive a message of bytes as a single message.
-        '''
+        """
         header = await self._reader.read_exactly(4)
-        size, = struct.unpack('!i', header)
+        (size,) = struct.unpack("!i", header)
         if maxlength and size > maxlength:
             raise IOError("Message too large")
         msg = await self._reader.read_exactly(size)
         return msg
 
     async def recv_bytes_into(self, buf, offset=0):
-        '''
+        """
         Receive bytes into a writable memory buffer.  The buffer must be large enough to
         hold the message.  The number of bytes received in the message is returned.
-        '''
+        """
         header = await self._reader.read_exactly(4)
-        size, = struct.unpack('!i', header)
-        with memoryview(buf).cast('B') as m:
+        (size,) = struct.unpack("!i", header)
+        with memoryview(buf).cast("B") as m:
             if size > (len(m) - offset):
                 # Message is too large to fit in allotted space
                 # Drain the I/O and raise an error
@@ -153,46 +152,46 @@ class Connection(object):
                     if not data:
                         break
                     size -= len(data)
-                raise IOError('Message is too large to fit')
-            nread = await self._reader.readinto(m[offset:offset+size])
+                raise IOError("Message is too large to fit")
+            nread = await self._reader.readinto(m[offset : offset + size])
             if nread != size:
-                raise EOFError('Expected end of data')
+                raise EOFError("Expected end of data")
             return nread
 
     async def send(self, obj):
-        '''
+        """
         Send an arbitrary Python object. Uses pickle to serialize.
-        '''
+        """
         await self.send_bytes(pickle.dumps(obj, pickle.HIGHEST_PROTOCOL))
 
     async def recv(self):
-        '''
+        """
         Receive a Python object. Uses pickle to unserialize.
-        '''
+        """
         msg = await self.recv_bytes()
         return pickle.loads(msg)
 
     async def _deliver_challenge(self, authkey):
         message = os.urandom(AUTH_MESSAGE_LENGTH)
         await self.send_bytes(CHALLENGE + message)
-        digest = hmac.new(authkey, message, 'md5').digest()
+        digest = hmac.new(authkey, message, "md5").digest()
         response = await self.recv_bytes(maxlength=256)
         if response == digest:
             await self.send_bytes(WELCOME)
         else:
             await self.send_bytes(FAILURE)
-            raise AuthenticationError('digest received was wrong')
+            raise AuthenticationError("digest received was wrong")
 
     async def _answer_challenge(self, authkey):
         message = await self.recv_bytes(maxlength=256)
-        assert message[:len(CHALLENGE)] == CHALLENGE, f'message = {message!r}'
-        message = message[len(CHALLENGE):]
-        digest = hmac.new(authkey, message, 'md5').digest()
+        assert message[: len(CHALLENGE)] == CHALLENGE, f"message = {message!r}"
+        message = message[len(CHALLENGE) :]
+        digest = hmac.new(authkey, message, "md5").digest()
         await self.send_bytes(digest)
         response = await self.recv_bytes(maxlength=256)
 
         if response != WELCOME:
-            raise AuthenticationError('digest sent was rejected')
+            raise AuthenticationError("digest sent was rejected")
 
     async def authenticate_server(self, authkey):
         await self._deliver_challenge(authkey)
@@ -201,6 +200,7 @@ class Connection(object):
     async def authenticate_client(self, authkey):
         await self._answer_challenge(authkey)
         await self._deliver_challenge(authkey)
+
 
 class Channel(object):
     def __init__(self, address, family=socket.AF_INET, check_address=None):
@@ -211,7 +211,7 @@ class Channel(object):
             self.check_address = check_address
 
     def __repr__(self):
-        return f'Channel({self.address!r}, {self.family!r})'
+        return f"Channel({self.address!r}, {self.family!r})"
 
     async def __aenter__(self):
         return self
@@ -243,7 +243,7 @@ class Channel(object):
         while True:
             client, addr = await self.sock.accept()
             if not self.check_address(addr):
-                log.warning('Channel connection from %s rejected', addr)
+                log.warning("Channel connection from %s rejected", addr)
                 await client.close()
                 del client
                 continue
@@ -257,7 +257,7 @@ class Channel(object):
                         await c.authenticate_server(authkey)
                 break
             except (TaskTimeout, AuthenticationError, EOFError):
-                log.warning('Channel connection from %s failed', addr, exc_info=True)
+                log.warning("Channel connection from %s failed", addr, exc_info=True)
                 await c.close()
                 del c
                 del client_stream
@@ -275,7 +275,7 @@ class Channel(object):
                     await c.authenticate_client(authkey)
             return c
         except TaskTimeout:
-            log.warning('Channel connection to %s timed out', self.address)
+            log.warning("Channel connection to %s timed out", self.address)
             await c.close()
             del c
             del sock_stream

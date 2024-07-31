@@ -25,7 +25,7 @@
 # Where host and port configure the network address on which the monitor
 # operates.
 #
-# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port]. 
+# To connect to the monitor, run python3 -m curio.monitor -H [host] -p [port].
 #
 # Theory of operation:
 # --------------------
@@ -43,7 +43,6 @@
 # doing.
 
 import os
-import signal
 import time
 import socket
 import threading
@@ -52,46 +51,52 @@ import logging
 import sys
 
 # --- Curio
-from .task import spawn
 from . import meta
-from . import queue
 
 # ---
 log = logging.getLogger(__name__)
 
-MONITOR_HOST = '127.0.0.1'
+MONITOR_HOST = "127.0.0.1"
 MONITOR_PORT = 48802
+
 
 # Implementation of the 'ps' command
 def ps(kernel=None, out=sys.stdout):
     if kernel is None:
         kernel = meta._locals.kernel
-    headers = ('Task', 'State', 'Cycles', 'Timeout', 'Sleep', 'Task')
+    headers = ("Task", "State", "Cycles", "Timeout", "Sleep", "Task")
     widths = (6, 12, 10, 7, 7, 50)
-    sout = ''
+    sout = ""
     for h, w in zip(headers, widths):
-        sout += '%-*s ' % (w, h)
-    sout += '\n'
-    sout += ' '.join(w * '-' for w in widths)
-    sout += '\n'
+        sout += "%-*s " % (w, h)
+    sout += "\n"
+    sout += " ".join(w * "-" for w in widths)
+    sout += "\n"
     timestamp = time.monotonic()
     for taskid in sorted(kernel._tasks):
         task = kernel._tasks.get(taskid)
         if task:
-            timeout_remaining = format(
-                (task.timeout - timestamp),
-                '0.6f')[:7] if task.timeout else 'None'
-            sleep_remaining = format(
-                (task.sleep - timestamp),
-                '0.6f')[:7] if task.sleep else 'None'
+            timeout_remaining = (
+                format((task.timeout - timestamp), "0.6f")[:7] if task.timeout else "None"
+            )
+            sleep_remaining = format((task.sleep - timestamp), "0.6f")[:7] if task.sleep else "None"
 
-            sout += '%-*d %-*s %-*d %-*s %-*s %-*s\n' % (widths[0], taskid,
-                                                         widths[1], task.state,
-                                                         widths[2], task.cycles,
-                                                         widths[3], timeout_remaining,
-                                                         widths[4], sleep_remaining,
-                                                         widths[5], task.name)
+            sout += "%-*d %-*s %-*d %-*s %-*s %-*s\n" % (
+                widths[0],
+                taskid,
+                widths[1],
+                task.state,
+                widths[2],
+                task.cycles,
+                widths[3],
+                timeout_remaining,
+                widths[4],
+                sleep_remaining,
+                widths[5],
+                task.name,
+            )
     out.write(sout)
+
 
 # Implementation of the 'where' command
 def where(taskid, kernel=None, out=sys.stdout):
@@ -99,15 +104,16 @@ def where(taskid, kernel=None, out=sys.stdout):
         kernel = meta._locals.kernel
     task = kernel._tasks.get(taskid)
     if task:
-        out.write(task.traceback() + '\n')
+        out.write(task.traceback() + "\n")
     else:
-        out.write('No task %d\n' % taskid)
-    
+        out.write("No task %d\n" % taskid)
+
+
 class Monitor(object):
-    '''
+    """
     Task monitor that runs concurrently to the curio kernel in a
     separate thread. This can watch the kernel and provide debugging.
-    '''
+    """
 
     def __init__(self, kern, host=MONITOR_HOST, port=MONITOR_PORT):
         self.kernel = kern
@@ -122,19 +128,19 @@ class Monitor(object):
             self._ui_thread.join()
 
     def start(self):
-        '''
+        """
         Function to start the monitor
-        '''
-        log.info('Starting Curio monitor at %s', self.address)
-        self._closing = threading.Event()        
+        """
+        log.info("Starting Curio monitor at %s", self.address)
+        self._closing = threading.Event()
         self._ui_thread = threading.Thread(target=self.server, args=(), daemon=True)
         self._ui_thread.start()
 
     def server(self):
-        '''
+        """
         Synchronous kernel for the monitor.  This runs in a separate thread
         from curio itself.
-        '''
+        """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
 
@@ -149,77 +155,79 @@ class Monitor(object):
                     client, addr = sock.accept()
                     with client:
                         client.settimeout(0.5)
+
                         # This bit of magic is for reading lines of input while still allowing timeouts
                         # and the ability for the monitor to die when curio exits.  See Issue #108.
                         def readlines():
                             buffer = bytearray()
                             while not self._closing.is_set():
-                                index = buffer.find(b'\n')
+                                index = buffer.find(b"\n")
                                 if index >= 0:
-                                    line = buffer[:index + 1].decode('latin-1')
-                                    del buffer[:index + 1]
+                                    line = buffer[: index + 1].decode("latin-1")
+                                    del buffer[: index + 1]
                                     yield line
                                 try:
-                                    chunk = client.recv(1000)
+                                    chunk = client.recv(1000)  # noqa: B023
                                     if not chunk:
                                         break
                                     buffer.extend(chunk)
                                 except socket.timeout:
                                     pass
 
-                        sout = client.makefile('w', encoding='latin-1')
+                        sout = client.makefile("w", encoding="latin-1")
                         self.interactive_loop(sout, readlines())
                         sout.close()
                 except socket.timeout:
                     continue
 
     def interactive_loop(self, sout, input_lines):
-        '''
+        """
         Main interactive loop of the monitor
-        '''
-        sout.write('\nCurio Monitor: %d tasks running\n' % len(self.kernel._tasks))
-        sout.write('Type help for commands\n')
+        """
+        sout.write("\nCurio Monitor: %d tasks running\n" % len(self.kernel._tasks))
+        sout.write("Type help for commands\n")
         while True:
-            sout.write('curio > ')
+            sout.write("curio > ")
             sout.flush()
             resp = next(input_lines, None)
             if not resp:
                 return
             try:
-                if resp.startswith('q'):
+                if resp.startswith("q"):
                     self.command_exit(sout)
                     return
 
-                elif resp.startswith('pa'):
+                elif resp.startswith("pa"):
                     _, taskid_s = resp.split()
                     self.command_parents(sout, int(taskid_s))
 
-                elif resp.startswith('p'):
+                elif resp.startswith("p"):
                     self.command_ps(sout)
 
-                elif resp.startswith('exit'):
+                elif resp.startswith("exit"):
                     self.command_exit(sout)
                     return
 
-                elif resp.startswith('w'):
+                elif resp.startswith("w"):
                     _, taskid_s = resp.split()
                     self.command_where(sout, int(taskid_s))
 
-                elif resp.startswith('h'):
+                elif resp.startswith("h"):
                     self.command_help(sout)
                 else:
-                    sout.write('Unknown command. Type help.\n')
-            except Exception as e:
-                sout.write('Bad command. %s\n' % e)
+                    sout.write("Unknown command. Type help.\n")
+            except Exception as e:  # noqa: BLE001
+                sout.write("Bad command. %s\n" % e)
 
     def command_help(self, sout):
         sout.write(
-            '''Commands:
+            """Commands:
          ps               : Show task table
          where taskid     : Show stack frames for a task
          parents taskid   : List task parents
          quit             : Leave the monitor
-''')
+"""
+        )
 
     def command_ps(self, sout):
         ps(self.kernel, sout)
@@ -231,44 +239,53 @@ class Monitor(object):
         while taskid:
             task = self.kernel._tasks.get(taskid)
             if task:
-                sout.write('%-6d %12s %s\n' % (task.id, task.state, task.name))
+                sout.write("%-6d %12s %s\n" % (task.id, task.state, task.name))
                 taskid = task.parentid
             else:
                 break
 
     def command_exit(self, sout):
-        sout.write('Leaving monitor.\n')
+        sout.write("Leaving monitor.\n")
         sout.flush()
 
+
 def monitor_client(host, port):
-    '''
+    """
     Client to connect to the monitor via a socket
-    '''
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
+
     def display(sock):
-        while (chunk := sock.recv(1000)):
-            sys.stdout.write(chunk.decode('utf-8'))
+        while chunk := sock.recv(1000):
+            sys.stdout.write(chunk.decode("utf-8"))
             sys.stdout.flush()
         os._exit(0)
+
     threading.Thread(target=display, args=[sock], daemon=True).start()
     while True:
         line = sys.stdin.readline()
-        sock.sendall(line.encode('utf-8'))
+        sock.sendall(line.encode("utf-8"))
     sock.close()
+
 
 def main():
     parser = argparse.ArgumentParser("usage: python -m curio.monitor [options]")
-    parser.add_argument("-H", "--host", dest="monitor_host",
-                        default=MONITOR_HOST, type=str,
-                        help="monitor host ip")
+    parser.add_argument(
+        "-H", "--host", dest="monitor_host", default=MONITOR_HOST, type=str, help="monitor host ip"
+    )
 
-    parser.add_argument("-p", "--port", dest="monitor_port",
-                        default=MONITOR_PORT, type=int,
-                        help="monitor port number")
+    parser.add_argument(
+        "-p",
+        "--port",
+        dest="monitor_port",
+        default=MONITOR_PORT,
+        type=int,
+        help="monitor port number",
+    )
     args = parser.parse_args()
     monitor_client(args.monitor_host, args.monitor_port)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
