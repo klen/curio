@@ -5,10 +5,10 @@ name: tests
 
 on:
   pull_request:
-    branches: [master, develop]
+    branches: [release, develop]
 
   push:
-    branches: [master, develop]
+    branches: [release, develop]
 
 jobs:
 
