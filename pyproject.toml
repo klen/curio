@@ -9,7 +9,7 @@ license = { "text" = "BSD" }
 version = "1.6.4"
 requires-python = ">=3.8"
 authors = [{ name = "David Beazley", email = "dave@dabeaz.com" }]
-classifiers = ["Programming Language :: Python :: 3", "Framework :: Pytest", "Framework :: Curio"]
+classifiers = ["Programming Language :: Python :: 3", "Framework :: Pytest"]
 
 [project.urls]
 homepage = "https://github.com/dabeaz/curio"
