@@ -1,7 +1,8 @@
 Curio
 =====
 
-.. note: This version is a fork of the original Curio project by David Beazley. The main goal of this fork is to provide latest updates to PyPI.
+.. warning::
+   This version is a fork of the original Curio project by David Beazley. The main goal of this fork is to provide latest updates to PyPI.
 
 Curio is a coroutine-based library for concurrent Python systems
 programming using async/await.  It provides standard programming
